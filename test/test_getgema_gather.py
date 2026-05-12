@@ -1,87 +1,58 @@
-import asyncio
 import json
-import re
-import sys
-import time
-from typing import Any
+import unittest
 
-from app import models
-from app.database import Session
-from app.getgema_gather import GetgemaGather
+import httpx
+
+from app.getgema_gather import GetgemaGather, extract_cursors, extract_numbers
 
 
-def re_all_cursor(value: str) -> list[str]:
-    # 定义正则表达式模式
-    pattern = r'"(T,\d{1,12},\d{8,24})"'
-    pattern = r'"cursor":\s"(.{1,32},.{1,32},.{1,32})",'
+class ParseHelpersTest(unittest.TestCase):
+    def test_extract_cursors(self) -> None:
+        value = '{"cursor": "T,123,12345678", "other": 1}'
+        self.assertEqual(extract_cursors(value), ["T,123,12345678"])
 
-    # 查找所有匹配项
-    return re.findall(pattern, value)
-
-
-def re_all_numbers(value: str) -> list[str]:
-    # 定义正则表达式模式
-    pattern = r'"(\+888\s\d{1,6}\s\d{1,6})"'
-
-    # 查找所有匹配项
-    return re.findall(pattern, value)
+    def test_extract_numbers(self) -> None:
+        value = '{"phone": "+888 123 456"}'
+        self.assertEqual(extract_numbers(value), ["+888 123 456"])
 
 
-async def main():
-    getgema_gather = GetgemaGather()
+class GetgemaGatherTest(unittest.IsolatedAsyncioTestCase):
+    async def test_nft_search_without_cursor(self) -> None:
+        seen: dict[str, str] = {}
 
-    cursor = None
-    for i in range(4878):
-        for _ in range(3):
-            try:
-                time.sleep(1)
-                result = await getgema_gather.nft_search(
-                    "EQAOQdwdw8kGftJCSFgOErM1mBjYPe4DBPq8-AhF6vr9si5N",
-                    "af904314608b2384958183c1c667de0028660f25c628a6a0ae9512e8c70a840e",
-                    cursor,
-                )
+        async def handler(request: httpx.Request) -> httpx.Response:
+            seen["operationName"] = request.url.params["operationName"]
+            seen["variables"] = request.url.params["variables"]
+            seen["extensions"] = request.url.params["extensions"]
+            return httpx.Response(200, json={"ok": True})
 
-                json_str = json.dumps(result)
+        gather = GetgemaGather(transport=httpx.MockTransport(handler))
+        result = await gather.nft_search("item", "sha256", None)
 
-                # 获取下一页游标
-                cursors = re_all_cursor(json_str)
-                if len(cursors) > 0:
-                    cursor = cursors[-1]
-                    print(f"next cursor - {cursor}")
-                else:
-                    sys.exit()
+        self.assertEqual(result, {"ok": True})
+        self.assertEqual(seen["operationName"], "nftSearch")
 
-                # 获取所有手机号
-                _numbers = [n.replace(" ", "") for n in re_all_numbers(json_str)]
-                print(f"第 {i + 1} 页 - {_numbers}")
+        variables = json.loads(seen["variables"])
+        self.assertEqual(variables["count"], 28)
+        self.assertNotIn("cursor", variables)
 
-                # 添加到数据库
-                with Session() as session:
-                    for _number in _numbers:
-                        try:
-                            is_exist = (
-                                session.query(models.ThreeEightsNumbers)
-                                .filter(models.ThreeEightsNumbers.number == _number)
-                                .count()
-                            )
-                            if is_exist > 0:
-                                continue
-                            number_data = models.ThreeEightsNumbers(number=_number)
-                            session.add(number_data)
-                            session.commit()
-                        except Exception as e:
-                            print(
-                                f"第 {i + 1} 页 - 发生错误 - 添加到数据库 - {_number} - {e}"
-                            )
+        extensions = json.loads(seen["extensions"])
+        self.assertEqual(extensions["persistedQuery"]["version"], 1)
+        self.assertEqual(extensions["persistedQuery"]["sha256Hash"], "sha256")
 
-                break
-            except Exception as e:
-                print(f"第 {i + 1} 页 - 发生错误 - {e}")
-                continue
+    async def test_nft_search_with_cursor(self) -> None:
+        seen: dict[str, str] = {}
 
-    pass
+        async def handler(request: httpx.Request) -> httpx.Response:
+            seen["variables"] = request.url.params["variables"]
+            return httpx.Response(200, json={"ok": True})
+
+        gather = GetgemaGather(transport=httpx.MockTransport(handler))
+        await gather.nft_search("item", "sha256", "T,123,12345678")
+
+        variables = json.loads(seen["variables"])
+        self.assertEqual(variables["cursor"], "T,123,12345678")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
-    pass
+    unittest.main()
