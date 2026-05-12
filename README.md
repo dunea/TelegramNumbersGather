@@ -1,6 +1,7 @@
 # Telegram Numbers Gather
 
 > 目录中的 `three_eights_numbers.json` 是开发阶段采集到的全部 888 号码数据，可直接使用，无需再次采集。
+> 文件直链：https://raw.githubusercontent.com/dunea/TelegramNumbersGather/refs/heads/master/three_eights_numbers.json
 
 这是一个基于 Python + SQLAlchemy 的号码采集脚本项目，默认从 GetGems 拉取数据并写入本地 SQLite 数据库 `data.db`。
 
