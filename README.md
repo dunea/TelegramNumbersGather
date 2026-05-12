@@ -1,4 +1,4 @@
-# Telegram Numbers Gather
+# Telegram +888 号码采集，共 13.6w 条，包含 Json 文件
 
 > 目录中的 `three_eights_numbers.json` 是开发阶段采集到的全部 888 号码数据，可直接使用，无需再次采集。
 > 文件直链：https://raw.githubusercontent.com/dunea/TelegramNumbersGather/refs/heads/master/three_eights_numbers.json
