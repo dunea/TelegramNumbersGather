@@ -1,4 +1,5 @@
 import json
+from typing import Optional
 
 import httpx
 
@@ -6,25 +7,25 @@ import httpx
 class GetgemaGather(object):
     def __init__(self):
         pass
-    
-    async def nft_search(self, item: str, sha256_hash: str, cursor: str = None):
+
+    async def nft_search(self, item: str, sha256_hash: str, cursor: Optional[str] = None):
         variables = {
             "query": json.dumps({"$and": [{"collectionAddress": item}]}),
             "attributes": None,
             "sort": json.dumps(
-                [{"isOnSale": {"order": "desc"}}, {"price": {"order": "asc"}}, {"index": {"order": "asc"}}]),
+                [
+                    {"isOnSale": {"order": "desc"}},
+                    {"price": {"order": "asc"}},
+                    {"index": {"order": "asc"}},
+                ]
+            ),
             "count": 28,
         }
         if cursor:
             variables["cursor"] = cursor
-        
-        extensions = {
-            "persistedQuery": {
-                "version": 1,
-                "sha256Hash": sha256_hash
-            }
-        }
-        
+
+        extensions = {"persistedQuery": {"version": 1, "sha256Hash": sha256_hash}}
+
         async with httpx.AsyncClient() as client:
             result = await client.get(
                 "https://getgems.io/graphql/",
@@ -41,5 +42,5 @@ class GetgemaGather(object):
                 },
             )
             result.raise_for_status()
-        
+
         return result.json()
